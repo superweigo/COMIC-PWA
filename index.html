@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Pure Black Comic Reader</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body, html { width: 100%; height: 100%; background-color: #000; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+    
+    #app-container { position: relative; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; }
+    #manga-img { width: 100vw; height: 100vh; object-fit: contain; transform-origin: center center; transition: transform 0.05s linear; }
+
+    #top-nav {
+      position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%);
+      width: 92vw; max-width: 440px; height: 44px; background: rgba(18, 18, 18, 0.92);
+      border: 1px solid rgba(255, 255, 255, 0.25); border-radius: 22px; display: flex;
+      justify-content: space-evenly; align-items: center; backdrop-filter: blur(8px);
+      z-index: 100; transition: opacity 0.3s, transform 0.3s;
+    }
+    
+    .pure-btn { background: #374151; color: #fff; border: none; padding: 6px 10px; border-radius: 14px; font-size: 12px; font-weight: bold; }
+    .pure-btn.home { background: #059669; }
+    .pure-btn.zoom { background: #4b5563; font-family: monospace; font-size: 13px; }
+
+    #page-indicator {
+      position: absolute; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.75); color: #fff; border: 1px solid rgba(255, 255, 255, 0.2);
+      padding: 4px 14px; border-radius: 12px; font-size: 12px; z-index: 100; pointer-events: none;
+    }
+
+    .ui-hidden { opacity: 0 !important; pointer-events: none !important; }
+  </style>
+</head>
+<body>
+
+<div id="app-container">
+  <img id="manga-img" src="" alt="請輸入漫畫網址或章節" />
+
+  <div id="top-nav">
+    <button class="pure-btn home" id="btn-home">🏠 目錄</button>
+    <button class="pure-btn" id="btn-prev-chap">‹ 上章</button>
+    <button class="pure-btn zoom" id="btn-zoom-out">－</button>
+    <button class="pure-btn zoom" id="btn-zoom-reset">100%</button>
+    <button class="pure-btn zoom" id="btn-zoom-in">＋</button>
+    <button class="pure-btn" id="btn-next-chap">下章 ›</button>
+  </div>
+
+  <div id="page-indicator">第 1 頁</div>
+</div>
+
+<script>
+  // 註冊 Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+
+  // 將你的比例記憶與縮放邏輯整合至此
+  let currentScale = parseFloat(localStorage.getItem("pure_reader_user_scale") || "1.0");
+  const img = document.getElementById("manga-img");
+  const zoomResetBtn = document.getElementById("btn-zoom-reset");
+
+  function updateTransform() {
+    img.style.transform = `scale(${currentScale})`;
+    zoomResetBtn.textContent = `${Math.round(currentScale * 100)}%`;
+    localStorage.setItem("pure_reader_user_scale", currentScale.toString());
+  }
+
+  document.getElementById("btn-zoom-in").onclick = () => { if(currentScale < 3.0) { currentScale += 0.05; updateTransform(); } };
+  document.getElementById("btn-zoom-out").onclick = () => { if(currentScale > 0.5) { currentScale -= 0.05; updateTransform(); } };
+  document.getElementById("btn-zoom-reset").onclick = () => { currentScale = 1.0; updateTransform(); };
+
+  updateTransform();
+</script>
+</body>
+</html>
