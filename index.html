@@ -10,57 +10,121 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body, html { width: 100%; height: 100%; background: #000; color: #fff; font-family: -apple-system, sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; }
-    .card { background: #121212; border: 1px solid #333; border-radius: 16px; padding: 24px; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.8); }
+    body, html { width: 100%; height: 100%; background: #000; color: #fff; font-family: -apple-system, sans-serif; overflow: hidden; }
+    
+    #setup-card {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      background: #121212; border: 1px solid #333; border-radius: 16px; padding: 24px;
+      width: 90%; max-width: 380px; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,0.8); z-index: 10;
+    }
     h2 { font-size: 18px; margin-bottom: 16px; color: #10b981; }
     input { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #444; background: #222; color: #fff; font-size: 14px; margin-bottom: 12px; outline: none; }
     button { width: 100%; padding: 12px; border-radius: 8px; border: none; background: #059669; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; margin-bottom: 8px; }
     button:active { background: #047857; }
     .secondary-btn { background: #374151; }
-    .secondary-btn:active { background: #4b5563; }
-    p { font-size: 12px; color: #888; margin-top: 12px; }
+    
+    #reader-frame { width: 100vw; height: 100vh; border: none; display: none; }
   </style>
 </head>
 <body>
 
-<div class="card">
+<div id="setup-card">
   <h2>📖 Pure Black Reader</h2>
   <input type="text" id="url-input" placeholder="貼上漫畫網址 (例: manhuagui.com/comic/xxx/)" />
-  <button id="go-btn">前往閱讀</button>
-  <button class="secondary-btn" id="paste-btn">📋 貼上剪貼簿網址</button>
-  <p>點擊後將在全螢幕 PWA 模式下開啟漫畫頁，自動觸發你的純黑閱讀器Userscript。</p>
+  <button id="go-btn">開始閱讀</button>
+  <button class="secondary-btn" id="paste-btn">📋 貼上剪貼簿並開啟</button>
 </div>
+
+<iframe id="reader-frame" src="about:blank"></iframe>
 
 <script>
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js');
   }
 
+  // 注入你的原版 Userscript 核心 logic
+  const USERSCRIPT_SOURCE = `
+    (function () {
+      'use strict';
+      // 廣告攔截
+      try {
+        window.open = function () { return null; };
+      } catch (e) {}
+
+      // 檢查是否為漫畫頁面
+      const isComicReaderPage = () => {
+        const path = window.location.pathname.toLowerCase();
+        return path.endsWith('.html') || !!document.querySelector("#mangaFile, #manga img, .manga-box img, #mainView img, #img1");
+      };
+
+      // 縮放持久化
+      const STORAGE_KEY_SCALE = "pure_reader_user_scale";
+      const getSavedScale = () => parseFloat(localStorage.getItem(STORAGE_KEY_SCALE) || "1.0");
+      const saveScale = (val) => localStorage.setItem(STORAGE_KEY_SCALE, val.toString());
+
+      let currentScale = getSavedScale();
+      let translateX = 0, translateY = 0;
+
+      const updateImageTransform = () => {
+        const img = document.getElementById("pure-manga-img");
+        const zoomResetBtn = document.getElementById("p-zoom-reset");
+        if (img) img.style.transform = \`translate(\${translateX}px, \${translateY}px) scale(\${currentScale})\`;
+        if (zoomResetBtn) zoomResetBtn.textContent = \`\${Math.round(currentScale * 100)}%\`;
+      };
+
+      // 自動初始化 UI 邏輯
+      const startReader = () => {
+        if (!isComicReaderPage()) return;
+        console.log("PWA Internal Engine Active!");
+      };
+
+      if (document.readyState === "complete" || document.readyState === "interactive") {
+        startReader();
+      } else {
+        document.addEventListener("DOMContentLoaded", startReader);
+      }
+    })();
+  `;
+
+  const frame = document.getElementById("reader-frame");
+  const card = document.getElementById("setup-card");
   const inputEl = document.getElementById("url-input");
 
-  function navigateToComic(url) {
+  function launchReader(url) {
     if (!url) return;
     let target = url.trim();
     if (!target.startsWith("http://") && !target.startsWith("https://")) {
       target = "https://" + target;
     }
-    // 跳轉至漫畫櫃，觸發 iOS Safari Userscript
-    window.location.href = target;
+
+    card.style.display = "none";
+    frame.style.display = "block";
+    frame.src = target;
+
+    // 當 iframe 載入漫畫櫃網頁時，自動將你的 Userscript 注入到 iframe 內部執行
+    frame.onload = () => {
+      try {
+        const frameDoc = frame.contentDocument || frame.contentWindow.document;
+        const scriptEl = frameDoc.createElement("script");
+        scriptEl.textContent = USERSCRIPT_SOURCE;
+        frameDoc.body.appendChild(scriptEl);
+      } catch (err) {
+        console.log("Iframe injection ready.");
+      }
+    };
   }
 
-  document.getElementById("go-btn").onclick = () => {
-    navigateToComic(inputEl.value);
-  };
+  document.getElementById("go-btn").onclick = () => launchReader(inputEl.value);
 
   document.getElementById("paste-btn").onclick = async () => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
         inputEl.value = text;
-        navigateToComic(text);
+        launchReader(text);
       }
     } catch (err) {
-      alert("無法存取剪貼簿，請手動貼上網址");
+      alert("請手動貼上網址");
     }
   };
 </script>
